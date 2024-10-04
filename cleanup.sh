@@ -10,7 +10,22 @@ else
 	main_branch=main
 fi
 
-branch=${1:-$(git for-each-ref --format '%(refname)')}
+branch=${1:-$(git for-each-ref --format '%(refname)' refs/heads/)}
+
+on_rebase_fail() {
+	echo "rebase failed, abort?"
+	read abort
+	if test $abort == 'y' ; then
+		git rebase --abort
+		echo "rebase aborted"
+		return
+	else
+		echo "please fix the merge failure and continue the rebase"
+		echo "press any key to continue"
+		read
+	fi
+}
+
 
 git checkout $main_branch
 for b in $branch ; do
@@ -31,13 +46,16 @@ for b in $branch ; do
 	if test $rebase != 'y' ; then
 		continue
 	fi
-	git rebase origin/$main_branch
-	git log -1
-	echo "delete? "
-	read delete
-	if test $delete != 'y' ; then
-		continue
+	if git rebase origin/$main_branch ; then
+		git log -1
+		echo "delete? "
+		read delete
+		if test $delete != 'y' ; then
+			continue
+		fi
+		git checkout $main_branch
+		git branch -d "$b"
+	else
+		on_rebase_fail
 	fi
-	git checkout $main_branch
-	git branch -d "$b"
 done
